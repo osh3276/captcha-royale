@@ -6,8 +6,22 @@ import http from "http";
 import SocketHandler from "./socket.js";
 import pool from "./db.js";
 import { Game, getAvailableGameId } from "./game.js";
+import { message, gameState } from "./message.js";
 
 const app = express();
+
+const CAPTCHA_POOL = [
+	"captcha1",
+	"captcha2",
+	"captcha3",
+	"captcha4",
+	"captcha5",
+	"captcha6",
+	"captcha7",
+	"captcha8",
+	"captcha9",
+	"captcha10",
+];
 
 // Middleware
 // The server will run on port 3001 to avoid conflicts with other common ports.
@@ -182,6 +196,130 @@ app.post("/create_game", authenticateToken, async (req, res) => {
 	}
 });
 
+app.post("/join_game", authenticateToken, async (req, res) => {
+	try {
+		const { game_code } = req.body;
+		const userId = req.user.id;
+
+		if (!game_code) {
+			return res.status(400).json({ error: "Game code is required" });
+		}
+
+		const game = socketHandler.games.get(game_code.toUpperCase());
+
+		if (!game) {
+			return res.status(404).json({ error: "Game not found" });
+		}
+
+		if (game.players.has(userId)) {
+			return res.status(200).json({
+				message: "You are already in this game",
+				game: game.getGameState(),
+			});
+		}
+
+		if (game.players.size >= 2) {
+			return res.status(403).json({ error: "Game is full" });
+		}
+
+		// Add player to game object
+		game.addPlayer(userId);
+
+		// Associate user's websocket with the game
+		if (socketHandler.clients.has(userId)) {
+			socketHandler.clients.get(userId).gameId = game.id;
+		}
+
+		// Persist user2 in the database
+		try {
+			const query = `
+                UPDATE games
+                SET user2 = $1
+                WHERE game_code = $2 AND user2 IS NULL;
+            `;
+			await pool.query(query, [userId, game.id]);
+		} catch (dbError) {
+			console.error("Failed to add player to game in DB", dbError);
+			// Potentially roll back adding player to game object in memory
+			return res.status(500).json({ error: "Failed to join game" });
+		}
+
+		// Notify players in the game that a new player has joined
+		for (const playerId of game.players.keys()) {
+			const client = socketHandler.clients.get(playerId)?.ws;
+			if (client) {
+				client.send(
+					JSON.stringify({
+						type: message.game_joined,
+						gameId: game.id,
+						gameState: game.getGameState(),
+					}),
+				);
+			}
+		}
+
+		res.status(200).json({
+			message: "Joined game successfully",
+			game: game.getGameState(),
+		});
+	} catch (error) {
+		console.error("Join game error:", error);
+		res.status(500).json({ error: "Failed to join game" });
+	}
+});
+
+app.post("/start_game", authenticateToken, async (req, res) => {
+	try {
+		const { game_code } = req.body;
+		const userId = req.user.id;
+
+		if (!game_code) {
+			return res.status(400).json({ error: "Game code is required" });
+		}
+
+		const game = socketHandler.games.get(game_code.toUpperCase());
+
+		if (!game) {
+			return res.status(404).json({ error: "Game not found" });
+		}
+
+		if (game.creatorId !== userId) {
+			return res
+				.status(403)
+				.json({ error: "Only the game creator can start the game" });
+		}
+
+		if (game.state !== gameState.waiting) {
+			return res
+				.status(403)
+				.json({ error: "Game has already started or is finished" });
+		}
+
+		game.startGame(CAPTCHA_POOL, 10);
+
+		// Notify all players in the game that the game has started
+		for (const playerId of game.players.keys()) {
+			const client = socketHandler.clients.get(playerId)?.ws;
+			if (client) {
+				client.send(
+					JSON.stringify({
+						type: message.game_started,
+						gameState: game.getGameState(),
+					}),
+				);
+			}
+		}
+
+		res.status(200).json({
+			message: "Game started successfully",
+			game: game.getGameState(),
+		});
+	} catch (error) {
+		console.error("Start game error:", error);
+		res.status(500).json({ error: "Failed to start game" });
+	}
+});
+
 // Protected route example
 app.get("/profile", authenticateToken, async (req, res) => {
 	try {
@@ -207,21 +345,6 @@ app.get("/profile", authenticateToken, async (req, res) => {
 // Public route
 app.get("/health", (req, res) => {
 	res.json({ status: "OK", timestamp: new Date().toISOString() });
-});
-
-// Game routes
-app.post("/create-game", (req, res) => {
-	// TODO: Implement create game logic
-	res.status(501).json({
-		message: "Create game endpoint - implementation pending",
-	});
-});
-
-app.post("/join-game", (req, res) => {
-	// TODO: Implement join game logic
-	res.status(501).json({
-		message: "Join game endpoint - implementation pending",
-	});
 });
 
 app.get("/user/:id", (req, res) => {

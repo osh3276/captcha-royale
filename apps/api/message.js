@@ -2,11 +2,8 @@ const message = {
 	auth: "auth",
 	auth_success: "auth_success",
 	auth_error: "auth_error",
-
-	join_game: "join_game", // this also sends a game code and the auth token
 	game_created: "game_created",
 	game_joined: "game_joined",
-	game_started: "game_started", // This is when the game starts we have to display the new page, in this message we send the initial queue of questions
 	game_ended: "game_ended", // This is when the game is over and th winner is decided
 	target_player: "target_player",
 	game_message: "game_message", // This will send the solutions to questions ...

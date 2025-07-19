@@ -2,12 +2,10 @@ import { message, gameState } from "./message.js";
 import pool from "./db.js";
 
 const getAvailableGameId = (games) => {
-	const newId =
-		Math.random().toString(36).substring(2, 15) +
-		Math.random().toString(36).substring(2, 15);
-	if (games.has(newId)) {
-		return getAvailableGameId(games);
-	}
+	let newId;
+	do {
+		newId = Math.random().toString(36).substring(2, 6).toUpperCase();
+	} while (games.has(newId));
 	return newId;
 };
 
@@ -117,8 +115,7 @@ class Game {
 		// This is called on game creation
 		const query = `
             INSERT INTO games (game_code, user1, state)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (game_code) DO NOTHING;
+            VALUES ($1, $2, $3);
         `;
 		try {
 			await pool.query(query, [this.id, this.creatorId, this.state]);
