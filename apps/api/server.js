@@ -1,113 +1,106 @@
 import express from "express";
-import pg from "pg";
-import dotenv from "dotenv";
-
-// Load environment variables from .env file
-dotenv.config();
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import rateLimit from "express-rate-limit";
 
 const app = express();
-// Middleware to parse JSON request bodies
+const PORT = process.env.PORT || 3000;
+const JWT_SECRET =
+	process.env.JWT_SECRET || "your-secret-key-change-in-production";
+
+// Middleware
 app.use(express.json());
-// The server will run on port 3001 to avoid conflicts with other common ports.
-const SERVER_PORT = process.env.SERVER_PORT || 3001;
 
-const pool = new pg.Pool({
-	connectionString: process.env.DB_URL,
-	ssl: {
-		rejectUnauthorized: false,
-	},
+// Rate limiting
+const authLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000, // 15 minutes
+	max: 5, // 5 attempts per window
+	message: { error: "Too many authentication attempts" },
 });
 
-// The main route to test the database connection
-app.get("/", async (req, res) => {
-	let client;
-	try {
-		// Get a client from the pool
-		client = await pool.connect();
-		console.log("Successfully connected to the database!");
+// In-memory user store (replace with database in production)
+const users = new Map();
 
-		// Query for the PostgreSQL version
-		const result = await client.query("SELECT version()");
-		const dbVersion = result.rows[0].version;
-		console.log("Database version:", dbVersion);
+// Auth middleware
+const authenticateToken = (req, res, next) => {
+	const authHeader = req.headers["authorization"];
+	const token = authHeader && authHeader.split(" ")[1];
 
-		// Send a success response with the database version
-		res.status(200).json({
-			message: "Database connection successful!",
-			databaseVersion: dbVersion,
-		});
-	} catch (error) {
-		// If there's an error, log it and send a 500 server error response
-		console.error(
-			"Error connecting to or querying the database:",
-			error.stack,
-		);
-		res.status(500).json({
-			error: "Failed to connect to or query the database.",
-			details: error.message,
-		});
-	} finally {
-		// IMPORTANT: Release the client back to the pool
-		if (client) {
-			client.release();
-			console.log("Database client released.");
+	if (!token) {
+		return res.status(401).json({ error: "Access token required" });
+	}
+
+	jwt.verify(token, JWT_SECRET, (err, user) => {
+		if (err) {
+			return res.status(403).json({ error: "Invalid or expired token" });
 		}
+		req.user = user;
+		next();
+	});
+};
+
+// Routes
+app.post("/register", authLimiter, async (req, res) => {
+	try {
+		const { username, password } = req.body;
+
+		if (!username || !password) {
+			return res
+				.status(400)
+				.json({ error: "Username and password required" });
+		}
+
+		if (users.has(username)) {
+			return res.status(409).json({ error: "Username already exists" });
+		}
+
+		const hashedPassword = await bcrypt.hash(password, 12);
+		users.set(username, { username, password: hashedPassword });
+
+		res.status(201).json({ message: "User registered successfully" });
+	} catch (error) {
+		res.status(500).json({ error: "Registration failed" });
 	}
 });
 
-// --- API Routes for Game Logic ---
+app.post("/login", authLimiter, async (req, res) => {
+	try {
+		const { username, password } = req.body;
 
-// Route to create a new game
-app.post("/create-game", (req, res) => {
-	// In a real application, you would generate a unique ID and store the game state.
-	const newGameId = `game_${Math.random().toString(36).substring(2, 9)}`;
-	console.log(`New game created with ID: ${newGameId}`);
-	res.status(201).json({
-		message: "Game created successfully!",
-		gameId: newGameId,
-	});
-});
+		if (!username || !password) {
+			return res
+				.status(400)
+				.json({ error: "Username and password required" });
+		}
 
-// Route to join an existing game
-app.post("/join-game", (req, res) => {
-	const { gameId, userId } = req.body;
+		const user = users.get(username);
+		if (!user || !(await bcrypt.compare(password, user.password))) {
+			return res.status(401).json({ error: "Invalid credentials" });
+		}
 
-	if (!gameId || !userId) {
-		return res
-			.status(400)
-			.json({ error: "Both gameId and userId are required." });
+		const token = jwt.sign({ username: user.username }, JWT_SECRET, {
+			expiresIn: "1h",
+		});
+
+		res.json({ token, expiresIn: "1h" });
+	} catch (error) {
+		res.status(500).json({ error: "Login failed" });
 	}
+});
 
-	// In a real application, you would validate the gameId and update its state with the new user.
-	console.log(`User ${userId} joined game ${gameId}`);
-	res.status(200).json({
-		message: `Successfully joined game ${gameId}`,
-		gameId,
-		userId,
+// Protected route example
+app.get("/profile", authenticateToken, (req, res) => {
+	res.json({
+		message: "Protected route accessed",
+		user: req.user.username,
 	});
 });
 
-// Route to get user statistics by ID
-app.get("/user/:id", (req, res) => {
-	const { id } = req.params;
-	console.log(`Fetching stats for user ${id}`);
-
-	// In a real application, you would fetch this data from your database.
-	const userStats = {
-		userId: id,
-		username: `User_${id}`,
-		gamesPlayed: Math.floor(Math.random() * 100),
-		wins: Math.floor(Math.random() * 50),
-		losses: Math.floor(Math.random() * 50),
-	};
-
-	res.status(200).json(userStats);
+// Public route
+app.get("/health", (req, res) => {
+	res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-// Start the Express server
-app.listen(SERVER_PORT, () => {
-	console.log(`Server is running on http://localhost:${SERVER_PORT}`);
-	console.log(
-		"Navigate to the above URL in your browser to test the database connection.",
-	);
+app.listen(PORT, () => {
+	console.log(`Server running on port ${PORT}`);
 });
