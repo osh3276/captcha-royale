@@ -31,7 +31,7 @@ export default function CaptchaGrid({
     return (
         <div className="flex flex-col items-center w-full">
             <div
-                className={`grid gap-1 mb-4`}
+                className={`grid gap-0.5 mb-4 rounded-md`}
                 style={{
                     gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
                     width: gridSize === 3 ? 300 : 400,
@@ -44,7 +44,7 @@ export default function CaptchaGrid({
                 {Array.from({ length: 16 }, (_, idx) => (
                     <button
                         key={idx}
-                        className={`border-2 rounded-md overflow-hidden focus:outline-none transition-all duration-150
+                        className={`border-3 overflow-hidden focus:outline-none transition-all duration-150
               ${selected.includes(idx) ? "border-blue-500 ring-2 ring-blue-400" : "border-gray-300"}
             `}
                         style={{ aspectRatio: "1/1", width: "100%", height: "100%" }}

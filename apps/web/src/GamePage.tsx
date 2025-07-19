@@ -5,6 +5,9 @@ import CaptchaGrid from "./components/CaptchaGrid";
 import { Button } from "./components/ui/button";
 import { Badge } from "./components/ui/badge";
 import { useNavigate } from "react-router";
+import { Separator } from "./components/ui/separator";
+import { FaArrowLeft, FaRegClock } from "react-icons/fa";
+import { LuTrophy } from "react-icons/lu";
 
 function getTrueIndices(arr: boolean[]): number[] {
     return arr
@@ -62,27 +65,40 @@ export default function GamePage() {
     return (
         <div className="h-screen w-screen flex flex-col">
             {/* Top bar */}
-            <div className="w-full h-[4rem] text-white p-4 flex justify-between items-center">
-                <div className="flex gap-4">
-                    {/* Exit button */}
-                    <Button onClick={handleExit}>Exit</Button>
-
-                    {/* Timer */}
-                    <Badge variant={"destructive"}>00:30</Badge>
-
-                    {/* Match position */}
-                    <Badge>Position: 1st</Badge>
-
-                    {/* Point counter */}
-                    <Badge>Points: 100</Badge>
-                </div>
 
 
-                <div className="flex gap-1">
-                    {/* Players remaining */}
-                    <Badge>Players Remaining: {opponents.length}</Badge>
+            <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
+                <div className="max-w-7xl mx-auto px-4 py-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <Button variant="ghost" size="sm" onClick={handleExit}>
+                                <FaArrowLeft className="w-4 h-4 mr-2" />
+                                Exit
+                            </Button>
+                            <div className="flex items-center gap-6">
+                                <div className="flex items-center gap-2">
+                                    <FaRegClock className="w-4 h-4 text-destructive" />
+                                    <span className="text-lg">{"00:30"}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <LuTrophy className="w-4 h-4 text-yellow-500" />
+                                    <span>#{1}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <LuTrophy className="w-4 h-4 text-blue-500" />
+                                    <span>{123} pts</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <Badge variant="outline" className="text-sm">
+                            {opponents.length} opponents remaining
+                        </Badge>
+                    </div>
                 </div>
             </div>
+
+            <Separator orientation="horizontal" />
 
             {/* Main gameplay area */}
             <div className="w-full h-full flex flex-col items-center justify-center">
@@ -95,15 +111,16 @@ export default function GamePage() {
                     </div>
 
                     {/* Gameplay area */}
-                    <div className="h-full flex-6/12 p-4">
-                        {currentUserCaptcha.target}
-                        <Card className="w-full h-full flex items-center justify-center">
+                    <div className="h-full flex-6/12 p-4 flex flex-col items-center justify-center gap-4">
+                        <Card className="w-full h-full flex items-center justify-center bg-muted/80 rounded-xl shadow-lg border border-border p-6">
+                            <div className="text-xl font-semibold text-foreground mb-2 tracking-wide">
+                                Select all: <span className="capitalize text-primary font-bold">{currentUserCaptcha.target}</span>
+                            </div>
                             <CaptchaGrid
                                 gridSize={4}
                                 image={`http://captcha-royale-images-3598237489.s3-website-us-east-1.amazonaws.com/required_images_output/${currentUserCaptcha.image}`}
-                                correctIndexes={correctIndexes} // Example: correct tiles
+                                correctIndexes={correctIndexes}
                                 onSubmit={(selected) => {
-                                    // TODO: handle submission
                                     alert(arraysEqualUnordered(selected, correctIndexes) ? "Correct!" : "Try again!");
                                 }}
                             />
