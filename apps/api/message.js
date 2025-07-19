@@ -3,6 +3,7 @@
 const message = {
     auth: "auth", 
     auth_success: "auth_success",
+    auth_error: "auth_error",
     create_game: "create_game", // This will create a new game and then return the id so the creator can join it 
     join_game: "join_game", 
     game_created: "game_created",
@@ -11,6 +12,7 @@ const message = {
     game_ended: "game_ended", // This is when the game is over and th winner is decided 
     game_message: "game_message",
     game_state: "game_state", // This is going to have the current state of the game so that you can see all of the other players' moves 
+    
 }
 
 const gameState = {
