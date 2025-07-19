@@ -1,4 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { message } from "../../api/message.js";
+
+
+// setup process
 
 type WebSocketContextType = {
     socket: WebSocket | null;
@@ -11,7 +15,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const [socket, setSocket] = useState<WebSocket | null>(null);
 
     useEffect(() => {
-        const ws = new WebSocket("ws://localhost:8080"); // Replace with your server URL
+        const host = "localhost"
+        const ws = new WebSocket(`ws://${host}:3001/ws`); // Replace with your server URL
         setSocket(ws);
 
         ws.onopen = () => console.log("WebSocket connected");

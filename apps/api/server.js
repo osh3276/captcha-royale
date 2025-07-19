@@ -7,8 +7,16 @@ import SocketHandler from "./socket.js";
 import pool from "./db.js";
 import { Game, getAvailableGameId } from "./game.js";
 import { message, gameState } from "./message.js";
+import cors from 'cors';
 
 const app = express();
+
+// Enable CORS for all routes
+app.use(cors({
+  origin: 'http://localhost:5173', // Allow requests from this origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allow these HTTP methods
+  credentials: true // Allow cookies to be sent
+}));
 
 const CAPTCHA_POOL = [
 	"captcha1",
