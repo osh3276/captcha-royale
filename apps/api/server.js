@@ -2,30 +2,17 @@ import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import rateLimit from "express-rate-limit";
-import pg from "pg";
-const { Pool } = pg;
-import dotenv from "dotenv";
 import http from "http";
 import SocketHandler from "./socket.js";
-
-// Load environment variables from .env file
-dotenv.config();
+import pool from "./db.js";
+import { Game, getAvailableGameId } from "./game.js";
 
 const app = express();
-
-// Database connection
-const pool = new Pool({
-	connectionString:
-		process.env.DB_URL ||
-		"postgresql://captcha_royale_user:lbukpE2V5zUX6fueLfBq79A9Dukwdiim@dpg-d1thep3ipnbc73cb36d0-a.oregon-postgres.render.com/captcha_royale",
-	ssl: { rejectUnauthorized: false },
-});
-
 
 // Middleware
 // The server will run on port 3001 to avoid conflicts with other common ports.
 const SERVER_PORT = process.env.SERVER_PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware to parse JSON request bodies
 app.use(express.json());
@@ -36,7 +23,6 @@ const authLimiter = rateLimit({
 	max: 5, // 5 attempts per window
 	message: { error: "Too many authentication attempts" },
 });
-
 
 // Auth middleware
 const authenticateToken = (req, res, next) => {
@@ -59,9 +45,9 @@ const authenticateToken = (req, res, next) => {
 // Server setup
 const server = http.createServer(app);
 server.listen(SERVER_PORT, () => {
-    console.log(`Server is running on http://localhost:${SERVER_PORT}`);
+	console.log(`Server is running on http://localhost:${SERVER_PORT}`);
 });
-new SocketHandler(server);
+const socketHandler = new SocketHandler(server);
 
 // Routes
 
@@ -176,21 +162,15 @@ app.post("/login", authLimiter, async (req, res) => {
 app.post("/create_game", authenticateToken, async (req, res) => {
 	try {
 		const userId = req.user.id;
-
-		// Insert new game with the authenticated user as user1
-		const result = await pool.query(
-			"INSERT INTO games (user1) VALUES ($1) RETURNING id, game_code, created_at",
-			[userId],
-		);
-
-		const game = result.rows[0];
+		const gameId = getAvailableGameId(socketHandler.games);
+		const newGame = new Game(gameId, userId, [userId]);
+		socketHandler.games.set(gameId, newGame);
 
 		res.status(201).json({
 			message: "Game created successfully",
 			game: {
-				id: game.id,
-				game_code: game.game_code,
-				created_at: game.created_at,
+				game_code: newGame.id,
+				created_at: new Date().toISOString(),
 				user1: userId,
 				user2: null,
 				winner: null,
@@ -232,15 +212,21 @@ app.get("/health", (req, res) => {
 // Game routes
 app.post("/create-game", (req, res) => {
 	// TODO: Implement create game logic
-	res.status(501).json({ message: "Create game endpoint - implementation pending" });
+	res.status(501).json({
+		message: "Create game endpoint - implementation pending",
+	});
 });
 
 app.post("/join-game", (req, res) => {
 	// TODO: Implement join game logic
-	res.status(501).json({ message: "Join game endpoint - implementation pending" });
+	res.status(501).json({
+		message: "Join game endpoint - implementation pending",
+	});
 });
 
 app.get("/user/:id", (req, res) => {
 	// TODO: Implement get user statistics logic
-	res.status(501).json({ message: "Get user statistics endpoint - implementation pending" });
+	res.status(501).json({
+		message: "Get user statistics endpoint - implementation pending",
+	});
 });
