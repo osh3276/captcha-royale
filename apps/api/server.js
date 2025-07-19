@@ -4,11 +4,14 @@ import bcrypt from "bcrypt";
 import rateLimit from "express-rate-limit";
 import pg from "pg";
 const { Pool } = pg;
+import dotenv from "dotenv";
+import http from "http";
+import SocketHandler from "./socket.js";
+
+// Load environment variables from .env file
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const JWT_SECRET =
-	process.env.JWT_SECRET || "your-secret-key-change-in-production";
 
 // Database connection
 const pool = new Pool({
@@ -18,26 +21,13 @@ const pool = new Pool({
 	ssl: { rejectUnauthorized: false },
 });
 
-// Initialize database table
-const initDB = async () => {
-	try {
-		await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(255) UNIQUE NOT NULL,
-        password VARCHAR(255) NOT NULL,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-		console.log("Database table initialized");
-	} catch (error) {
-		console.error("Database initialization error:", error);
-	}
-};
-
-initDB();
 
 // Middleware
+// The server will run on port 3001 to avoid conflicts with other common ports.
+const SERVER_PORT = process.env.SERVER_PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key-change-in-production";
+
+// Middleware to parse JSON request bodies
 app.use(express.json());
 
 // Rate limiting
@@ -46,6 +36,7 @@ const authLimiter = rateLimit({
 	max: 5, // 5 attempts per window
 	message: { error: "Too many authentication attempts" },
 });
+
 
 // Auth middleware
 const authenticateToken = (req, res, next) => {
@@ -65,7 +56,52 @@ const authenticateToken = (req, res, next) => {
 	});
 };
 
+// Server setup
+const server = http.createServer(app);
+server.listen(SERVER_PORT, () => {
+    console.log(`Server is running on http://localhost:${SERVER_PORT}`);
+});
+new SocketHandler(server);
+
 // Routes
+
+// The main route to test the database connection
+app.get("/", async (req, res) => {
+	let client;
+	try {
+		// Get a client from the pool
+		client = await pool.connect();
+		console.log("Successfully connected to the database!");
+
+		// Query for the PostgreSQL version
+		const result = await client.query("SELECT version()");
+		const dbVersion = result.rows[0].version;
+		console.log("Database version:", dbVersion);
+
+		// Send a success response with the database version
+		res.status(200).json({
+			message: "Database connection successful!",
+			databaseVersion: dbVersion,
+		});
+	} catch (error) {
+		console.error(
+			"Error connecting to or querying the database:",
+			error.stack,
+		);
+		res.status(500).json({
+			error: "Failed to connect to or query the database.",
+			details: error.message,
+		});
+	} finally {
+		// IMPORTANT: Release the client back to the pool
+		if (client) {
+			client.release();
+			console.log("Database client released.");
+		}
+	}
+});
+
+// Authentication routes
 app.post("/register", authLimiter, async (req, res) => {
 	try {
 		const { username, password } = req.body;
@@ -193,6 +229,18 @@ app.get("/health", (req, res) => {
 	res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-	console.log(`Server running on port ${PORT}`);
+// Game routes
+app.post("/create-game", (req, res) => {
+	// TODO: Implement create game logic
+	res.status(501).json({ message: "Create game endpoint - implementation pending" });
+});
+
+app.post("/join-game", (req, res) => {
+	// TODO: Implement join game logic
+	res.status(501).json({ message: "Join game endpoint - implementation pending" });
+});
+
+app.get("/user/:id", (req, res) => {
+	// TODO: Implement get user statistics logic
+	res.status(501).json({ message: "Get user statistics endpoint - implementation pending" });
 });
