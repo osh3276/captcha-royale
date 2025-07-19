@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import MainMenu from './MainMenu.tsx'
+import GamePage from "./GamePage.tsx";
 
 const router = createBrowserRouter([
   {
@@ -18,6 +19,10 @@ const router = createBrowserRouter([
     path: "/main-menu",
     element: <MainMenu onCreateGame={() => {}} onJoinGame={() => {}} />,
   },
+  {
+    path: "/play",
+    element: <GamePage />,
+  }
 ]);
 
 const root = document.getElementById("root");
