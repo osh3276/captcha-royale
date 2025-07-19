@@ -137,6 +137,35 @@ app.post("/login", authLimiter, async (req, res) => {
 	}
 });
 
+app.post("/create_game", authenticateToken, async (req, res) => {
+	try {
+		const userId = req.user.id;
+
+		// Insert new game with the authenticated user as user1
+		const result = await pool.query(
+			"INSERT INTO games (user1) VALUES ($1) RETURNING id, game_code, created_at",
+			[userId],
+		);
+
+		const game = result.rows[0];
+
+		res.status(201).json({
+			message: "Game created successfully",
+			game: {
+				id: game.id,
+				game_code: game.game_code,
+				created_at: game.created_at,
+				user1: userId,
+				user2: null,
+				winner: null,
+			},
+		});
+	} catch (error) {
+		console.error("Create game error:", error);
+		res.status(500).json({ error: "Failed to create game" });
+	}
+});
+
 // Protected route example
 app.get("/profile", authenticateToken, async (req, res) => {
 	try {
