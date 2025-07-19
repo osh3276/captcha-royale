@@ -3,6 +3,7 @@
 const message = {
     auth: "auth", 
     auth_success: "auth_success",
+    auth_error: "auth_error",
     create_game: "create_game", // This will create a new game and then return the id so the creator can join it 
     join_game: "join_game", // this also sends a game code and the auth token 
     game_created: "game_created",
@@ -12,7 +13,8 @@ const message = {
     target_player: "target_player", 
     game_message: "game_message", // This will send the solutions to questions ... 
     game_state: "game_state", // This is going to have the current state of the game so that you can see all of the other players' moves 
-    
+    captchaCorrect: "captchaCorrect",
+    captchaWrong: "captchaWrong"
 }
 
 const gameState = {
