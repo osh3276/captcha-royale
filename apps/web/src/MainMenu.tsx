@@ -17,6 +17,8 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
   } from "@/components/ui/dropdown-menu";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -48,59 +50,91 @@ export default function MainMenu({ onCreateGame, onJoinGame }: MainMenuProps) {
                     <div className="text-center space-y-4">
                         <h1 className = "text-4xl text-primary">Captcha Royale</h1>
                         <p className = "text-muted-foreground">Compete with other players in real-time captcha challenges</p>
-                        <div className = "w-full flex justify-center">
+                        <div className = "w-full flex flex-col items-center space-y-4">
                             <Card className = "w-full max-w-lg">
                                 <CardHeader>
                                     <CardTitle className = "text-center">Play Captcha Royale!</CardTitle>
                                 </CardHeader>
-                                    <CardContent className = "text-left">
-                                        <form>
-                                            <div className = "space-y-4">
-                                                <Label className = "block mb-2">Your Username</Label>
-                                                <Input
-                                                    placeholder = "Enter your display name"
-                                                    value = {playerName}
-                                                    onChange = {(e) => setPlayerName(e.target.value)}
-                                                    maxLength = {20}
-                                                />
-                                                {/* <div className = "grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                    <div className = "space-y-4">
-                                                        <h3>Create Game</h3>
-                                                        <p className = "text-muted-foreground">Start a game and invite friends</p>
-                                                        <Button
-                                                            onClick={handleCreateGame}
-                                                            disabled={!playerName.trim()}
-                                                            className = "w-full"
-                                                        > Create Game Code</Button>
-                                                    </div>
+                                <CardContent className = "text-left">
+                                    <form>
+                                        <div className = "space-y-4">
+                                            <Label className = "block mb-2">Your Username</Label>
+                                            <Input
+                                                placeholder = "Enter your display name"
+                                                value = {playerName}
+                                                onChange = {(e) => setPlayerName(e.target.value)}
+                                                maxLength = {20}
+                                            />
+                                        </div>
 
-                                                    <div className = "space-y-4">
-                                                        <h3>Join Game</h3>
-                                                        <Input
-                                                            placeholder = "Enter invite code"
-                                                            value = {inviteCode}
-                                                            onChange = {(e) => setInviteCode(e.target.value.toLowerCase())}
-                                                            maxLength = {6}
-                                                        />
-                                                        <Button
-                                                            onClick={handleJoinGame}
-                                                            disabled={!inviteCode.trim() || !playerName.trim()}
-                                                            variant="outline"
-                                                            className = "w-full"
-                                                        > Join Game</Button>
-                                                    </div>
-                                                </div> */}
-                                            </div>
-                                        </form>
+                                        {/* <div className = "space-y-4">
+                                            <h3>Join Game</h3>
+                                            <Input
+                                                placeholder = "Enter invite code"
+                                                value = {inviteCode}
+                                                onChange = {(e) => setInviteCode(e.target.value.toLowerCase())}
+                                                maxLength = {6}
+                                            />
+                                            <Button
+                                                onClick={handleJoinGame}
+                                                disabled={!inviteCode.trim() || !playerName.trim()}
+                                                variant="outline"
+                                                className = "w-full"
+                                            > Join Game</Button>
+                                        </div> */}
+                                    </form>
+                                </CardContent>
+                            </Card>
+                            
+                            <div className = "w-full flex flex-col md:flex-row items-center md:items-start justify-center gap-4">
+                                <Card className = "w-full max-w-sm ">
+                                    <CardHeader>
+                                        <CardTitle className = "text-center">Create Game</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className = "space-y-3">
+                                            <p className = "text-muted-foreground">Start a game and invite friends</p>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant = "outline"># of Rounds</Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent>
+                                                    {Array.from({length: 18}, (_, i) => i + 3).map((number) => (
+                                                        <DropdownMenuItem key = {number} onClick = {() => console.log({number})}>
+                                                            {number}
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu> 
+                                            <Button
+                                                type = "submit"
+                                                onClick={handleCreateGame}
+                                                disabled={!playerName.trim()}
+                                                className = "w-full"
+                                            > Create Game Code</Button>
+                                    </CardContent>                                                    
+                                </Card>
+
+                                <Card className = "w-full max-w-sm">
+                                    <CardHeader>
+                                        <CardTitle className = "text-center">Join Game</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className = "space-y-3">
+                                        <p className = "text-muted-foreground">Enter game code to join</p>
+                                        <Input
+                                            placeholder = "Enter invite code"
+                                            value = {inviteCode}
+                                            onChange = {(e) => setInviteCode(e.target.value.toLowerCase())}
+                                            maxLength = {6}
+                                        />
+                                        <Button
+                                            onClick={handleJoinGame}
+                                            disabled={!inviteCode.trim() || !playerName.trim()}
+                                            variant="outline"
+                                            className = "w-full"
+                                        > Join Game</Button>
                                     </CardContent>
-                            </Card>
-                            <Card className = "w-full max-w-md">
-                                <CardHeader>
-                                    <CardTitle className = "text-center">Create Game</CardTitle>
-                                </CardHeader>
-                                    
-
-                            </Card>
+                                </Card> 
+                            </div>                                  
                         </div>
                     </div>
                 </div>
