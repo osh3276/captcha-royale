@@ -69,16 +69,11 @@ class SocketHandler {
 
 	async handleMessage(ws, data) {
 		// Handle subscription to a game lobby for real-time updates
-		if (data.type === "subscribe" && data.game_code) {
-			// Associate this ws.id with the game_code for broadcasting
-			const client = this.clients.get(ws.id);
-			if (client) {
-				client.gameId = data.game_code.toUpperCase();
-			} else {
-				this.clients.set(ws.id, { ws, gameId: data.game_code.toUpperCase() });
-			}
-			// Optionally, send confirmation
-			ws.send(JSON.stringify({ type: "subscribed", game_code: data.game_code.toUpperCase() }));
+		if (data.type === "subscribe" && data.game_code && data.player_id) {
+			// Set ws.id to player_id and use player_id as key in clients
+			ws.id = data.player_id;
+			this.clients.set(ws.id, { ws, gameId: data.game_code.toUpperCase() });
+			ws.send(JSON.stringify({ type: "subscribed", game_code: data.game_code.toUpperCase(), player_id: ws.id }));
 			return;
 		}
 		switch (data.type) {
