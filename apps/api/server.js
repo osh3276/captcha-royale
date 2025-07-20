@@ -237,10 +237,19 @@ app.post("/create_game", async (req, res) => {
 	}
 });
 
-app.post("/join_game", authenticateToken, async (req, res) => {
+app.post("/join_game", async (req, res) => {
+	const client = await pool.connect();
 	try {
-		const { game_code } = req.body;
-		const userId = req.user.id;
+		await client.query("BEGIN");
+
+		const { game_code, player_name } = req.body;
+		console.log(game_code, player_name);
+
+		const playerResult = await client.query(
+			"INSERT INTO players (player_name) VALUES ($1) RETURNING player_id",
+			[player_name]
+		);
+		const userId = playerResult.rows[0].player_id;
 
 		if (!game_code) {
 			return res.status(400).json({ error: "Game code is required" });
@@ -259,9 +268,9 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 			});
 		}
 
-		if (game.players.size >= 2) {
-			return res.status(403).json({ error: "Game is full" });
-		}
+		// if (game.players.size >= 2) {
+		// 	return res.status(403).json({ error: "Game is full" });
+		// }
 
 		// Add player to game object
 		game.addPlayer(userId);
@@ -275,8 +284,8 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 		try {
 			const query = `
                 UPDATE games
-                SET user2 = $1
-                WHERE game_code = $2 AND user2 IS NULL;
+                SET players = array_append(players, $1::uuid)
+                WHERE game_code = $2;
             `;
 			await pool.query(query, [userId, game.id]);
 		} catch (dbError) {
@@ -299,9 +308,36 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 			}
 		}
 
+		await client.query("COMMIT");
+
+		let ret = []
+		for (const playerId of game.players.keys()) {
+			ret.push({
+				player_id: playerId,
+				player_name: game.players.get(playerId).player_name ?? "Player"
+			});
+		}
+
+		const result = await pool.query("SELECT player_id, player_name FROM players");
+		const playerMap = new Map();
+		for (const row of result.rows) {
+			playerMap.set(row.player_id, row.player_name);
+		}
+
+		const gameRet = {
+			created_at: game.createdAt,
+			game_code: game.id,
+			rounds: game.rounds,
+			players: ret,
+			creator: {
+				player_id: game.creatorId,
+				player_name: playerMap.get(game.creatorId),
+			}
+		}
+
 		res.status(200).json({
 			message: "Joined game successfully",
-			game: game.getGameState(),
+			game: gameRet,
 		});
 	} catch (error) {
 		console.error("Join game error:", error);

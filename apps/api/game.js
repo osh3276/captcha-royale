@@ -10,24 +10,31 @@ const getAvailableGameId = (games) => {
 };
 
 class Game {
-	constructor(id, creatorId, players = []) {
+	constructor(id, createdAt, creatorId, gameCode, rounds, players = [], saveToDb = true) {
 		this.id = id;
+		this.createdAt = createdAt;
 		this.creatorId = creatorId;
+		this.game_code = gameCode;
+		this.rounds = rounds;
 		this.state = gameState.waiting;
 		this.players = new Map(); // userId -> playerState
-		players.forEach((userId) => {
-			this.players.set(userId, {
-				solved: 0,
-				left: 10, // or whatever the starting number is
-				captchaQueue: [], // array of captcha ids
-				targetting: [], // array of userIds
-				currentCaptcha: null, // id of the current captcha
+		if (players) {
+			players.forEach((userId) => {
+				this.players.set(userId, {
+					solved: 0,
+					left: 10, // or whatever the starting number is
+					captchaQueue: [], // array of captcha ids
+					targetting: [], // array of userIds
+					currentCaptcha: null, // id of the current captcha
+				});
 			});
-		});
+		}
 		this.startTime = null;
 		this.endTime = null;
 		this.winner = null;
-		this.saveToDatabase();
+		if (saveToDb) {
+			this.saveToDatabase();
+		}
 	}
 
 	addPlayer(userId) {
@@ -114,7 +121,7 @@ class Game {
 	async saveToDatabase() {
 		// This is called on game creation
 		const query = `
-            INSERT INTO games (game_code, user1, state)
+            INSERT INTO games (id, creator, state)
             VALUES ($1, $2, $3);
         `;
 		try {

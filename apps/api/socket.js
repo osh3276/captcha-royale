@@ -1,5 +1,5 @@
 import { WebSocketServer } from "ws";
-import jwt from "jsonwebtoken";
+// import jwt from "jsonwebtoken";
 import { message } from "./message.js";
 import { Game, getAvailableGameId } from "./game.js";
 import pool from "./db.js";
@@ -25,8 +25,9 @@ class SocketHandler {
 		this.wss = new WebSocketServer({ server, path: "/ws" });
 		console.log("WebSocket server created and listening on /ws");
 
+		this.populateGamesMap(); // Populate games map on startup
+
 		this.wss.on("connection", (ws) => {
-			ws.isAuthenticated = false;
 			ws.on("message", async (messageStr) => {
 				let data;
 				try {
@@ -40,32 +41,10 @@ class SocketHandler {
 					);
 					return;
 				}
-				if (!ws.isAuthenticated) {
-					if (data.type === message.auth) {
-						// JWT code structure, but do not check token for now
-						let decoded = {};
-						try {
-							decoded = jwt.decode(data.token) || {};
-						} catch (err) {
-							// ignore error, allow any user for now
-						}
-						ws.id =
-							decoded.id ||
-							Math.random().toString(36).substring(2, 15); // If this is not set then for testing
-
-						ws.isAuthenticated = true;
-						this.clients.set(ws.id, { ws });
-						ws.send(JSON.stringify({ type: message.auth_success }));
-					} else {
-						ws.send(
-							JSON.stringify({
-								type: message.auth_error,
-								message: "Authentication required",
-							}),
-						);
-						ws.close();
-					}
-					return;
+				// Assign a random id if not already set
+				if (!ws.id) {
+					ws.id = Math.random().toString(36).substring(2, 15);
+					this.clients.set(ws.id, { ws });
 				}
 				await this.handleMessage(ws, data);
 			});
@@ -73,6 +52,19 @@ class SocketHandler {
 				if (ws.id) this.clients.delete(ws.id);
 			});
 		});
+	}
+
+	async populateGamesMap() {
+		try {
+			const result = await pool.query("SELECT * FROM games");
+			for (const row of result.rows) {
+				const gameInstance = new Game(row.id, row.created_at, row.creator, row.game_code, row.rounds, row.players, false); // Adjust as needed for your Game constructor
+				this.games.set(row.game_code, gameInstance);
+			}
+			console.log(`Loaded ${this.games.size} games from the database.`);
+		} catch (err) {
+			console.error("Failed to populate games map:", err);
+		}
 	}
 
 	async handleMessage(ws, data) {
