@@ -15,6 +15,6 @@ export interface GameSession {
   players: Player[];
   maxPlayers: number;
   gameState: GameState;
-  timeRemaining: number;
+  rounds: number;
   inviteCode: string;
 }

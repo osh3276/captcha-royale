@@ -19,7 +19,7 @@ const router = createBrowserRouter([
   },
   {
     path: "/main-menu",
-    element: <MainMenu onCreateGame={() => { }} onJoinGame={() => { }} />,
+    element: <MainMenu />,
   },
   {
     path: "/lobby",

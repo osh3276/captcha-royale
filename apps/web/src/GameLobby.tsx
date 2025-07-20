@@ -2,10 +2,11 @@ import React, { useEffect } from 'react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Badge } from './components/ui/badge';
-import { Copy, Crown, Users, Clock, ArrowLeft } from 'lucide-react';
+import { Copy, Crown, Users, Clock, ArrowLeft, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import type { GameSession, Player } from './types';
 import { useWebSocket } from "./WebSocketProvider";
+import { useLocation, useNavigate } from 'react-router';
 
 interface GameLobbyProps {
     currentPlayer: Player;
@@ -13,13 +14,16 @@ interface GameLobbyProps {
 
 export function GameLobby({ currentPlayer }: GameLobbyProps) {
     const { socket, sendMessage } = useWebSocket();
+    const location = useLocation();
+    const { playerName, rounds } = location.state as { playerName: string; rounds: number };
+    const navigate = useNavigate();
 
     const [session, setSession] = React.useState<GameSession>({
         id: "session-1",
         players: [
             {
                 id: "player-1",
-                name: "DemoPlayer",
+                name: playerName,
                 score: 0,
                 isReady: true,
                 isHost: true,
@@ -29,7 +33,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
         ],
         maxPlayers: 8,
         gameState: "lobby",
-        timeRemaining: 180,
+        rounds: rounds,
         inviteCode: "ABCD12"
     });
 
@@ -56,6 +60,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
         // Logic to leave the game
         toast.info('You have left the game lobby.');
         sendMessage(JSON.stringify({ type: "leaveGame", sessionId: session.id }));
+        navigate("/main-menu");
     };
 
     // Mock additional players for demo
@@ -142,10 +147,10 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                                     <span>{readyPlayers}/{mockPlayers.length}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span>Game Duration:</span>
+                                    <span>Round Count:</span>
                                     <span className="flex items-center gap-1">
-                                        <Clock className="w-4 h-4" />
-                                        3:00
+                                        <Repeat className="w-4 h-4" />
+                                        {rounds}
                                     </span>
                                 </div>
                             </CardContent>
