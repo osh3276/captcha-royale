@@ -1,3 +1,6 @@
+
+
+// (MOVED) Get latest game state for a given game_code (for lobby refresh)
 import express from "express";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
@@ -197,8 +200,8 @@ app.post("/create_game", async (req, res) => {
 		// 2. Insert new game with creator and players array
 		const gameResult = await client.query(
 			`INSERT INTO games (creator, players, created_at, game_code, rounds)
-       VALUES ($1, ARRAY[$1]::uuid[], NOW(), $2, $3)
-       RETURNING id, created_at, game_code`,
+	   VALUES ($1, ARRAY[$1]::uuid[], NOW(), $2, $3)
+	   RETURNING id, created_at, game_code`,
 			[creatorId, generateGameId(), rounds]
 		);
 
@@ -221,6 +224,25 @@ app.post("/create_game", async (req, res) => {
 			GROUP BY g.id, g.created_at, g.game_code, g.rounds, creator_p.player_id, creator_p.player_name`,
 			[gameResult.rows[0].id]
 		);
+
+		// Add the new game to the in-memory socketHandler.games map
+		const newGameRow = gameResult.rows[0];
+		// Fetch creator name for in-memory game
+		const creatorPlayer = await client.query(
+			'SELECT player_id, player_name FROM players WHERE player_id = $1',
+			[creatorId]
+		);
+		const creatorObj = creatorPlayer.rows[0];
+		const newGame = new Game(
+			newGameRow.id,
+			newGameRow.created_at,
+			creatorObj.player_id,
+			newGameRow.game_code,
+			rounds,
+			[{ player_id: creatorObj.player_id, player_name: creatorObj.player_name }],
+			false
+		);
+		socketHandler.games.set(newGameRow.game_code, newGame);
 
 		await client.query("COMMIT");
 
@@ -272,8 +294,8 @@ app.post("/join_game", async (req, res) => {
 		// 	return res.status(403).json({ error: "Game is full" });
 		// }
 
-		// Add player to game object
-		game.addPlayer(userId);
+		// Add player to game object, with name
+		game.addPlayer(userId, player_name);
 
 		// Associate user's websocket with the game
 		if (socketHandler.clients.has(userId)) {
@@ -283,11 +305,11 @@ app.post("/join_game", async (req, res) => {
 		// Persist user2 in the database
 		try {
 			const query = `
-                UPDATE games
-                SET players = array_append(players, $1::uuid)
-                WHERE game_code = $2;
-            `;
-			await pool.query(query, [userId, game.id]);
+				UPDATE games
+				SET players = array_append(players, $1::uuid)
+				WHERE game_code = $2;
+			`;
+			await pool.query(query, [userId, game_code.toUpperCase()]);
 		} catch (dbError) {
 			console.error("Failed to add player to game in DB", dbError);
 			// Potentially roll back adding player to game object in memory
@@ -326,7 +348,7 @@ app.post("/join_game", async (req, res) => {
 
 		const gameRet = {
 			created_at: game.createdAt,
-			game_code: game.id,
+			game_code: game.game_code, // Use the 4-letter code
 			rounds: game.rounds,
 			players: ret,
 			creator: {

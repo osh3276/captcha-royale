@@ -68,11 +68,24 @@ class SocketHandler {
 	}
 
 	async handleMessage(ws, data) {
+		// Handle subscription to a game lobby for real-time updates
+		if (data.type === "subscribe" && data.game_code) {
+			// Associate this ws.id with the game_code for broadcasting
+			const client = this.clients.get(ws.id);
+			if (client) {
+				client.gameId = data.game_code.toUpperCase();
+			} else {
+				this.clients.set(ws.id, { ws, gameId: data.game_code.toUpperCase() });
+			}
+			// Optionally, send confirmation
+			ws.send(JSON.stringify({ type: "subscribed", game_code: data.game_code.toUpperCase() }));
+			return;
+		}
 		switch (data.type) {
 			case message.game_message: {
 				// Handle captcha submission
 				const { captchaId, isCorrect } = data;
-				const { gameId } = this.clients.get(ws.id);
+				const { gameId } = this.clients.get(ws.id) || {};
 				const game = this.games.get(gameId);
 				if (game) {
 					const result = game.handleCaptchaSubmission(
@@ -104,7 +117,7 @@ class SocketHandler {
 			}
 			case message.game_state: {
 				// Send current game state to the requester
-				const { gameId } = this.clients.get(ws.id);
+				const { gameId } = this.clients.get(ws.id) || {};
 				const game = this.games.get(gameId);
 				if (game) {
 					ws.send(

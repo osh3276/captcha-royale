@@ -9,6 +9,7 @@ const getAvailableGameId = (games) => {
 	return newId;
 };
 
+
 class Game {
 	constructor(id, createdAt, creatorId, gameCode, rounds, players = [], saveToDb = true) {
 		this.id = id;
@@ -19,14 +20,27 @@ class Game {
 		this.state = gameState.waiting;
 		this.players = new Map(); // userId -> playerState
 		if (players) {
-			players.forEach((userId) => {
-				this.players.set(userId, {
-					solved: 0,
-					left: 10, // or whatever the starting number is
-					captchaQueue: [], // array of captcha ids
-					targetting: [], // array of userIds
-					currentCaptcha: null, // id of the current captcha
-				});
+			players.forEach((player) => {
+				// player can be userId or { player_id, player_name }
+				if (typeof player === 'object' && player.player_id && player.player_name) {
+					this.players.set(player.player_id, {
+						player_name: player.player_name,
+						solved: 0,
+						left: 10,
+						captchaQueue: [],
+						targetting: [],
+						currentCaptcha: null,
+					});
+				} else {
+					this.players.set(player, {
+						player_name: undefined,
+						solved: 0,
+						left: 10,
+						captchaQueue: [],
+						targetting: [],
+						currentCaptcha: null,
+					});
+				}
 			});
 		}
 		this.startTime = null;
@@ -37,9 +51,10 @@ class Game {
 		}
 	}
 
-	addPlayer(userId) {
+	addPlayer(userId, playerName) {
 		if (this.state === gameState.waiting && !this.players.has(userId)) {
 			this.players.set(userId, {
+				player_name: playerName,
 				solved: 0,
 				left: 10,
 				captchaQueue: [],
@@ -86,6 +101,7 @@ class Game {
 		const state = {};
 		for (const [userId, player] of this.players.entries()) {
 			state[userId] = {
+				player_name: player.player_name,
 				solved: player.solved,
 				left: player.left,
 				currentCaptcha: player.currentCaptcha,
@@ -105,10 +121,10 @@ class Game {
 		this.endTime = Date.now();
 
 		const query = `
-            UPDATE games
-            SET winner = $1, state = $2, ended_at = NOW()
-            WHERE game_code = $3;
-        `;
+			UPDATE games
+			SET winner = $1, state = $2, ended_at = NOW()
+			WHERE game_code = $3;
+		`;
 
 		try {
 			await pool.query(query, [this.winner, this.state, this.id]);
@@ -121,9 +137,9 @@ class Game {
 	async saveToDatabase() {
 		// This is called on game creation
 		const query = `
-            INSERT INTO games (id, creator, state)
-            VALUES ($1, $2, $3);
-        `;
+			INSERT INTO games (id, creator, state)
+			VALUES ($1, $2, $3);
+		`;
 		try {
 			await pool.query(query, [this.id, this.creatorId, this.state]);
 			console.log(`Game ${this.id} saved to database.`);
