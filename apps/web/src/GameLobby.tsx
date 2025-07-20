@@ -12,20 +12,64 @@ interface GameLobbyProps {
     currentPlayer: Player;
 }
 
-export function GameLobby({ currentPlayer }: GameLobbyProps) {
+export function GameLobby(props: GameLobbyProps) {
     const { socket, sendMessage } = useWebSocket();
     const location = useLocation();
+    console.log("GameLobby location state:", location.state);
+    // Use currentPlayer from location.state if present, else from props
+    const currentPlayer = location.state?.currentPlayer || props.currentPlayer;
     const gameData = location.state.gameData.game;
     const navigate = useNavigate();
 
     const [session, setSession] = React.useState<GameSession>(gameData);
+    console.log("SESSION", session);
+
+    // On mount, fetch the latest game state from the backend (for hard refreshes)
+    useEffect(() => {
+        const fetchLatestSession = async () => {
+            try {
+                const res = await fetch(`/game_state?game_code=${gameData.game_code}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.game) setSession(data.game);
+                }
+            } catch (err) {
+                console.error("Failed to fetch latest game state", err);
+            }
+        };
+        fetchLatestSession();
+
+        // Subscribe to game updates via WebSocket
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code }));
+        } else if (socket) {
+            // If socket not open yet, subscribe on open
+            socket.onopen = () => {
+                socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code }));
+            };
+        }
+    }, [gameData.game_code, socket]);
 
     useEffect(() => {
         if (!socket) return;
         socket.onmessage = (event) => {
             const data = JSON.parse(event.data);
             if (data.type === "sessionUpdate") setSession(data.session);
-        }
+            // On game_joined or game_state, update the entire session object if possible
+            if ((data.type === "game_joined" || data.type === "game_state") && data.gameState) {
+                setSession(prev => ({
+                    ...prev,
+                    ...((data.game && typeof data.game === 'object') ? data.game : {}),
+                    players: Object.keys(data.gameState.players).map((id, idx) => ({
+                        player_id: id,
+                        player_name: data.gameState.players[id].player_name || `Player ${idx + 1}`
+                    })),
+                    creator: (data.game && data.game.creator) || prev.creator,
+                    rounds: (data.game && data.game.rounds) || prev.rounds,
+                    game_code: (data.game && data.game.game_code) || prev.game_code,
+                }));
+            }
+        };
     }, [socket]);
 
     const copyInviteCode = () => {
@@ -46,8 +90,8 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
         navigate("/main-menu");
     };
 
-    // Mock additional players for demo
-    const mockPlayers: Player[] = session.players.map(p => ({
+    // Use real players from session
+    const realPlayers: Player[] = session.players.map(p => ({
         id: p.player_id,
         name: p.player_name,
         score: 0,
@@ -57,7 +101,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
         isHost: p.player_id === session.creator.player_id,
     }));
 
-    const readyPlayers = mockPlayers.filter(p => p.isReady).length;
+    const readyPlayers = realPlayers.filter(p => p.isReady).length;
     const canStart = readyPlayers >= 2 && currentPlayer.isHost;
 
     return (
@@ -102,7 +146,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                             <CardContent className="space-y-4">
                                 <div className="flex justify-between">
                                     <span>Ready:</span>
-                                    <span>{readyPlayers}/{mockPlayers.length}</span>
+                                    <span>{readyPlayers}/{realPlayers.length}</span>
                                 </div>
                                 <div className="flex justify-between">
                                     <span>Round Count:</span>
@@ -142,11 +186,11 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                     <div className="lg:col-span-2">
                         <Card>
                             <CardHeader>
-                                <CardTitle>Players ({mockPlayers.length})</CardTitle>
+                                <CardTitle>Players ({realPlayers.length})</CardTitle>
                             </CardHeader>
                             <CardContent>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {mockPlayers.map((player) => (
+                                    {realPlayers.map((player) => (
                                         <div
                                             key={player.id}
                                             className={`flex items-center gap-3 p-3 rounded-lg border ${player.id === currentPlayer.id ? 'bg-accent border-primary' : 'bg-card'

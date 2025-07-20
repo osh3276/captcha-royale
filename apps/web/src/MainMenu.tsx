@@ -45,6 +45,35 @@ const onCreateGame = async (playerName: string, rounds: number) => {
 const onJoinGame = async (inviteCode: string, playerName: string) => {
     // Logic to join a game session
     console.log(`Joining game with code: ${inviteCode} for player: ${playerName}`);
+    let response;
+    try {
+        response = await fetch('http://localhost:3001/join_game', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ game_code: inviteCode, player_name: playerName }),
+        });
+    } catch (error) {
+        console.error(error);
+        throw new Error('Network error while joining game');
+    }
+
+    if (!response || !response.ok) {
+        let msg = `HTTP error! status: ${response?.status}`;
+        try {
+            const errData = await response.json();
+            msg += `: ${errData?.error || ''}`;
+        } catch { }
+        throw new Error(msg);
+    }
+
+    const data = await response.json();
+    // Defensive: ensure player_id is always found
+    if (!data?.game?.players || !Array.isArray(data.game.players)) {
+        throw new Error('No players found in game data');
+    }
+    return data;
 }
 
 export default function MainMenu() {
@@ -56,20 +85,53 @@ export default function MainMenu() {
 
     const handleCreateGame = async () => {
         if (playerName.trim() !== '' && rounds) {
-            // Call your backend or onCreateGame logic here
             const newGameData = await onCreateGame(playerName.trim(), rounds);
-            // Redirect to GameLobby and pass player info
+            // Find the player_id and player_name from the response
+            const player_id = newGameData?.game?.creator?.player_id || newGameData?.game?.players?.[0]?.player_id;
+            const player_name = newGameData?.game?.creator?.player_name || playerName.trim();
             navigate("/lobby", {
                 state: {
                     gameData: newGameData,
+                    currentPlayer: {
+                        id: player_id,
+                        name: player_name,
+                        score: 0,
+                        isReady: false,
+                        isHost: true,
+                        captchasSolved: 0,
+                        status: "waiting"
+                    }
                 },
             });
         }
     }
 
-    const handleJoinGame = () => {
+    const handleJoinGame = async () => {
         if (inviteCode.trim() && playerName.trim()) {
-            onJoinGame(inviteCode.trim().toLowerCase(), playerName.trim());
+            const joinGameData = await onJoinGame(inviteCode.trim().toLowerCase(), playerName.trim());
+            // Find the player_id for the joining player
+            let player_id = null;
+            if (joinGameData?.game?.players) {
+                // Find by player_name match (case-insensitive)
+                const found = joinGameData.game.players.find(
+                    (p: { player_id: string; player_name: string }) => p.player_name.toLowerCase() === playerName.trim().toLowerCase()
+                );
+                player_id = found?.player_id;
+            }
+            navigate("/lobby", {
+                state: {
+                    gameData: joinGameData,
+                    currentPlayer: {
+                        id: player_id,
+                        name: playerName.trim(),
+                        score: 0,
+                        isReady: false,
+                        isHost: joinGameData?.game?.creator?.player_id === player_id,
+                        captchasSolved: 0,
+                        status: "waiting"
+                    }
+                }
+            });
         }
     }
 
