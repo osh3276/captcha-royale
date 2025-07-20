@@ -41,7 +41,7 @@ class SocketHandler {
 					return;
 				}
 				if (!ws.isAuthenticated) {
-					if (data.type === message.auth && data.token) {
+					if (data.type === message.auth) {
 						// JWT code structure, but do not check token for now
 						let decoded = {};
 						try {

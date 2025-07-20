@@ -23,12 +23,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from 'react-router';
 
-const onCreateGame = (playerName: string) => {
+const onCreateGame = async (playerName: string, rounds: number) => {
     // Logic to create a game session
     console.log(`Creating game for player: ${playerName}`);
+    const response = await fetch('http://localhost:3001/create_game', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ player_name: playerName, rounds: rounds }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return await data;
 }
 
-const onJoinGame = (inviteCode: string, playerName: string) => {
+const onJoinGame = async (inviteCode: string, playerName: string) => {
     // Logic to join a game session
     console.log(`Joining game with code: ${inviteCode} for player: ${playerName}`);
 }
@@ -40,15 +54,14 @@ export default function MainMenu() {
 
     const navigate = useNavigate();
 
-    const handleCreateGame = () => {
+    const handleCreateGame = async () => {
         if (playerName.trim() !== '' && rounds) {
             // Call your backend or onCreateGame logic here
-            onCreateGame(playerName.trim());
+            const newGameData = await onCreateGame(playerName.trim(), rounds);
             // Redirect to GameLobby and pass player info
             navigate("/lobby", {
                 state: {
-                    playerName: playerName.trim(),
-                    rounds,
+                    gameData: newGameData,
                 },
             });
         }

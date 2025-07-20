@@ -2,8 +2,8 @@ import React, { useEffect } from 'react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
 import { Badge } from './components/ui/badge';
-import { Copy, Crown, Users, Clock, ArrowLeft, Repeat } from 'lucide-react';
-import { toast } from 'sonner';
+import { Copy, Crown, Users, ArrowLeft, Repeat } from 'lucide-react';
+import { toast, Toaster } from 'sonner';
 import type { GameSession, Player } from './types';
 import { useWebSocket } from "./WebSocketProvider";
 import { useLocation, useNavigate } from 'react-router';
@@ -15,27 +15,10 @@ interface GameLobbyProps {
 export function GameLobby({ currentPlayer }: GameLobbyProps) {
     const { socket, sendMessage } = useWebSocket();
     const location = useLocation();
-    const { playerName, rounds } = location.state as { playerName: string; rounds: number };
+    const gameData = location.state.gameData.game;
     const navigate = useNavigate();
 
-    const [session, setSession] = React.useState<GameSession>({
-        id: "session-1",
-        players: [
-            {
-                id: "player-1",
-                name: playerName,
-                score: 0,
-                isReady: true,
-                isHost: true,
-                captchasSolved: 0,
-                status: "waiting"
-            }
-        ],
-        maxPlayers: 8,
-        gameState: "lobby",
-        rounds: rounds,
-        inviteCode: "ABCD12"
-    });
+    const [session, setSession] = React.useState<GameSession>(gameData);
 
     useEffect(() => {
         if (!socket) return;
@@ -46,7 +29,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
     }, [socket]);
 
     const copyInviteCode = () => {
-        navigator.clipboard.writeText(session.inviteCode);
+        navigator.clipboard.writeText(session.game_code);
         toast.success('Invite code copied to clipboard!');
     };
 
@@ -64,36 +47,15 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
     };
 
     // Mock additional players for demo
-    const mockPlayers: Player[] = [
-        ...session.players,
-        {
-            id: 'player-2',
-            name: 'SpeedSolver',
-            score: 0,
-            isReady: true,
-            isHost: false,
-            captchasSolved: 0,
-            status: 'waiting'
-        },
-        {
-            id: 'player-3',
-            name: 'CaptchaKing',
-            score: 0,
-            isReady: false,
-            isHost: false,
-            captchasSolved: 0,
-            status: 'waiting'
-        },
-        {
-            id: 'player-4',
-            name: 'QuickThink',
-            score: 0,
-            isReady: true,
-            isHost: false,
-            captchasSolved: 0,
-            status: 'waiting'
-        }
-    ];
+    const mockPlayers: Player[] = session.players.map(p => ({
+        id: p.player_id,
+        name: p.player_name,
+        score: 0,
+        captchasSolved: 0,
+        status: 'waiting',
+        isReady: false,
+        isHost: p.player_id === session.creator.player_id,
+    }));
 
     const readyPlayers = mockPlayers.filter(p => p.isReady).length;
     const canStart = readyPlayers >= 2 && currentPlayer.isHost;
@@ -117,7 +79,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                     <div className="text-right">
                         <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className="text-lg px-3 py-1">
-                                {session.inviteCode}
+                                {session.game_code}
                             </Badge>
                             <Button variant="ghost" size="sm" onClick={copyInviteCode}>
                                 <Copy className="w-4 h-4" />
@@ -139,10 +101,6 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div className="flex justify-between">
-                                    <span>Players:</span>
-                                    <span>{mockPlayers.length}/{session.maxPlayers}</span>
-                                </div>
-                                <div className="flex justify-between">
                                     <span>Ready:</span>
                                     <span>{readyPlayers}/{mockPlayers.length}</span>
                                 </div>
@@ -150,7 +108,7 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                                     <span>Round Count:</span>
                                     <span className="flex items-center gap-1">
                                         <Repeat className="w-4 h-4" />
-                                        {rounds}
+                                        {session.rounds}
                                     </span>
                                 </div>
                             </CardContent>
@@ -227,6 +185,8 @@ export function GameLobby({ currentPlayer }: GameLobbyProps) {
                     </div>
                 </div>
             </div>
+
+            <Toaster />
         </div>
     );
 }

@@ -7,6 +7,7 @@ import SocketHandler from "./socket.js";
 import pool from "./db.js";
 import { Game, getAvailableGameId } from "./game.js";
 import { message, gameState } from "./message.js";
+import cors from "cors";
 
 const app = express();
 
@@ -29,7 +30,10 @@ const SERVER_PORT = process.env.SERVER_PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 
 // Middleware to parse JSON request bodies
-app.use(express.json());
+app.use(express.json(), cors({
+	origin: "http://localhost:5173", // Adjust this to your frontend URL
+	credentials: true, // Allow cookies to be sent with requests
+}));
 
 // Rate limiting
 const authLimiter = rateLimit({
@@ -173,26 +177,63 @@ app.post("/login", authLimiter, async (req, res) => {
 	}
 });
 
-app.post("/create_game", authenticateToken, async (req, res) => {
+app.post("/create_game", async (req, res) => {
+	const generateGameId = () => {
+		return Math.random().toString(36).substring(2, 6).toUpperCase();
+	};
+
+	const client = await pool.connect();
 	try {
-		const userId = req.user.id;
-		const gameId = getAvailableGameId(socketHandler.games);
-		const newGame = new Game(gameId, userId, [userId]);
-		socketHandler.games.set(gameId, newGame);
+		await client.query("BEGIN");
+
+		// 1. Insert creator into players table
+		const { player_name, rounds } = req.body;
+		const playerResult = await client.query(
+			"INSERT INTO players (player_name) VALUES ($1) RETURNING player_id",
+			[player_name]
+		);
+		const creatorId = playerResult.rows[0].player_id;
+
+		// 2. Insert new game with creator and players array
+		const gameResult = await client.query(
+			`INSERT INTO games (creator, players, created_at, game_code, rounds)
+       VALUES ($1, ARRAY[$1]::uuid[], NOW(), $2, $3)
+       RETURNING id, created_at, game_code`,
+			[creatorId, generateGameId(), rounds]
+		);
+
+		// 3. Fetch the complete game data with player details using JOIN
+		const completeGameResult = await client.query(
+			`SELECT 
+				g.id, 
+				g.created_at, 
+				g.game_code,
+				g.rounds,
+				json_build_object('player_id', creator_p.player_id, 'player_name', creator_p.player_name) as creator,
+				json_agg(
+					json_build_object('player_id', p.player_id, 'player_name', p.player_name)
+					ORDER BY p.player_name
+				) as players
+			FROM games g
+			JOIN players creator_p ON g.creator = creator_p.player_id
+			JOIN players p ON p.player_id = ANY(g.players)
+			WHERE g.id = $1
+			GROUP BY g.id, g.created_at, g.game_code, g.rounds, creator_p.player_id, creator_p.player_name`,
+			[gameResult.rows[0].id]
+		);
+
+		await client.query("COMMIT");
 
 		res.status(201).json({
 			message: "Game created successfully",
-			game: {
-				game_code: newGame.id,
-				created_at: new Date().toISOString(),
-				user1: userId,
-				user2: null,
-				winner: null,
-			},
+			game: completeGameResult.rows[0],
 		});
 	} catch (error) {
+		await client.query("ROLLBACK");
 		console.error("Create game error:", error);
-		res.status(500).json({ error: "Failed to create game" });
+		res.status(500).json({ error: "Failed to create game", message: error.message });
+	} finally {
+		client.release();
 	}
 });
 
