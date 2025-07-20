@@ -1,5 +1,5 @@
 import { WebSocketServer } from "ws";
-import jwt from "jsonwebtoken";
+// import jwt from "jsonwebtoken";
 import { message } from "./message.js";
 import { Game, getAvailableGameId } from "./game.js";
 import pool from "./db.js";
@@ -25,8 +25,9 @@ class SocketHandler {
 		this.wss = new WebSocketServer({ server, path: "/ws" });
 		console.log("WebSocket server created and listening on /ws");
 
+		this.populateGamesMap(); // Populate games map on startup
+
 		this.wss.on("connection", (ws) => {
-			ws.isAuthenticated = false;
 			ws.on("message", async (messageStr) => {
 				let data;
 				try {
@@ -40,32 +41,10 @@ class SocketHandler {
 					);
 					return;
 				}
-				if (!ws.isAuthenticated) {
-					if (data.type === message.auth && data.token) {
-						// JWT code structure, but do not check token for now
-						let decoded = {};
-						try {
-							decoded = jwt.decode(data.token) || {};
-						} catch (err) {
-							// ignore error, allow any user for now
-						}
-						ws.id =
-							decoded.id ||
-							Math.random().toString(36).substring(2, 15); // If this is not set then for testing
-
-						ws.isAuthenticated = true;
-						this.clients.set(ws.id, { ws });
-						ws.send(JSON.stringify({ type: message.auth_success }));
-					} else {
-						ws.send(
-							JSON.stringify({
-								type: message.auth_error,
-								message: "Authentication required",
-							}),
-						);
-						ws.close();
-					}
-					return;
+				// Assign a random id if not already set
+				if (!ws.id) {
+					ws.id = Math.random().toString(36).substring(2, 15);
+					this.clients.set(ws.id, { ws });
 				}
 				await this.handleMessage(ws, data);
 			});
@@ -75,12 +54,38 @@ class SocketHandler {
 		});
 	}
 
+	async populateGamesMap() {
+		try {
+			const result = await pool.query("SELECT * FROM games");
+			for (const row of result.rows) {
+				const gameInstance = new Game(row.id, row.created_at, row.creator, row.game_code, row.rounds, row.players, false); // Adjust as needed for your Game constructor
+				this.games.set(row.game_code, gameInstance);
+			}
+			console.log(`Loaded ${this.games.size} games from the database.`);
+		} catch (err) {
+			console.error("Failed to populate games map:", err);
+		}
+	}
+
 	async handleMessage(ws, data) {
+		// Handle subscription to a game lobby for real-time updates
+		if (data.type === "subscribe" && data.game_code) {
+			// Associate this ws.id with the game_code for broadcasting
+			const client = this.clients.get(ws.id);
+			if (client) {
+				client.gameId = data.game_code.toUpperCase();
+			} else {
+				this.clients.set(ws.id, { ws, gameId: data.game_code.toUpperCase() });
+			}
+			// Optionally, send confirmation
+			ws.send(JSON.stringify({ type: "subscribed", game_code: data.game_code.toUpperCase() }));
+			return;
+		}
 		switch (data.type) {
 			case message.game_message: {
 				// Handle captcha submission
 				const { captchaId, isCorrect } = data;
-				const { gameId } = this.clients.get(ws.id);
+				const { gameId } = this.clients.get(ws.id) || {};
 				const game = this.games.get(gameId);
 				if (game) {
 					const result = game.handleCaptchaSubmission(
@@ -112,7 +117,7 @@ class SocketHandler {
 			}
 			case message.game_state: {
 				// Send current game state to the requester
-				const { gameId } = this.clients.get(ws.id);
+				const { gameId } = this.clients.get(ws.id) || {};
 				const game = this.games.get(gameId);
 				if (game) {
 					ws.send(
