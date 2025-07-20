@@ -1,3 +1,31 @@
+/**
+ * Real-time Lobby Update Mechanism
+ *
+ * This component ensures all players in a game lobby receive real-time updates when new players join.
+ *
+ * Key Implementation Details:
+ *
+ * 1. WebSocket Subscription:
+ *    - On mount, the client sends a WebSocket message of type "subscribe" with both the game_code and player_id.
+ *    - Example: { type: "subscribe", game_code, player_id }
+ *    - This allows the backend to associate the WebSocket connection with the correct player and game.
+ *
+ * 2. Backend Association:
+ *    - The backend sets ws.id = player_id and uses player_id as the key in its clients map.
+ *    - This ensures that when the backend broadcasts updates (e.g., when a new player joins),
+ *      it can correctly find and notify all relevant WebSocket clients.
+ *
+ * 3. Real-time Updates:
+ *    - When a player joins, the backend notifies all players in the game via WebSocket.
+ *    - The frontend listens for "game_joined" and "game_state" messages and updates the lobby UI accordingly.
+ *
+ * 4. Hard Refresh Support:
+ *    - On mount, the lobby also fetches the latest game state from the REST endpoint (/game_state) to ensure
+ *      the player list is always up to date, even after a hard refresh.
+ *
+ * This approach solves the problem where early-joining clients would not receive real-time updates for new players.
+ * All clients are now reliably associated with their player_id and game, ensuring correct and immediate lobby updates.
+ */
 import React, { useEffect } from 'react';
 import { Button } from './components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card';
@@ -41,11 +69,11 @@ export function GameLobby(props: GameLobbyProps) {
 
         // Subscribe to game updates via WebSocket
         if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code }));
+            socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code, player_id: currentPlayer.id }));
         } else if (socket) {
             // If socket not open yet, subscribe on open
             socket.onopen = () => {
-                socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code }));
+                socket.send(JSON.stringify({ type: "subscribe", game_code: gameData.game_code, player_id: currentPlayer.id }));
             };
         }
     }, [gameData.game_code, socket]);
