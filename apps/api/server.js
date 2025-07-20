@@ -1,22 +1,22 @@
 import express from "express";
-import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
-import rateLimit from "express-rate-limit";
+
 import http from "http";
 import SocketHandler from "./socket.js";
 import pool from "./db.js";
 import { Game, getAvailableGameId } from "./game.js";
 import { message, gameState } from "./message.js";
-import cors from 'cors';
+import cors from "cors";
 
 const app = express();
 
 // Enable CORS for all routes
-app.use(cors({
-  origin: 'http://localhost:5173', // Allow requests from this origin
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Allow these HTTP methods
-  credentials: true // Allow cookies to be sent
-}));
+app.use(
+	cors({
+		origin: "http://localhost:5173", // Allow requests from this origin
+		methods: ["GET", "POST", "PUT", "DELETE"], // Allow these HTTP methods
+		credentials: true, // Allow cookies to be sent
+	}),
+);
 
 const CAPTCHA_POOL = [
 	"captcha1",
@@ -34,35 +34,8 @@ const CAPTCHA_POOL = [
 // Middleware
 // The server will run on port 3001 to avoid conflicts with other common ports.
 const SERVER_PORT = process.env.SERVER_PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET;
-
 // Middleware to parse JSON request bodies
 app.use(express.json());
-
-// Rate limiting
-const authLimiter = rateLimit({
-	windowMs: 15 * 60 * 1000, // 15 minutes
-	max: 5, // 5 attempts per window
-	message: { error: "Too many authentication attempts" },
-});
-
-// Auth middleware
-const authenticateToken = (req, res, next) => {
-	const authHeader = req.headers["authorization"];
-	const token = authHeader && authHeader.split(" ")[1];
-
-	if (!token) {
-		return res.status(401).json({ error: "Access token required" });
-	}
-
-	jwt.verify(token, JWT_SECRET, (err, user) => {
-		if (err) {
-			return res.status(403).json({ error: "Invalid or expired token" });
-		}
-		req.user = user;
-		next();
-	});
-};
 
 // Server setup
 const server = http.createServer(app);
@@ -109,83 +82,15 @@ app.get("/", async (req, res) => {
 	}
 });
 
-// Authentication routes
-app.post("/register", authLimiter, async (req, res) => {
+app.post("/create_game", async (req, res) => {
 	try {
-		const { username, password } = req.body;
-
-		if (!username || !password) {
-			return res
-				.status(400)
-				.json({ error: "Username and password required" });
+		console.log("Create game route called");
+		const { username } = req.body;
+		if (!username) {
+			return res.status(400).json({ error: "Username is required" });
 		}
-
-		// Check if user already exists
-		const existingUser = await pool.query(
-			"SELECT id FROM users WHERE username = $1",
-			[username],
-		);
-		if (existingUser.rows.length > 0) {
-			return res.status(409).json({ error: "Username already exists" });
-		}
-
-		const hashedPassword = await bcrypt.hash(password, 12);
-
-		// Insert new user
-		await pool.query(
-			"INSERT INTO users (username, password) VALUES ($1, $2)",
-			[username, hashedPassword],
-		);
-
-		res.status(201).json({ message: "User registered successfully" });
-	} catch (error) {
-		console.error("Registration error:", error);
-		res.status(500).json({ error: "Registration failed" });
-	}
-});
-
-app.post("/login", authLimiter, async (req, res) => {
-	try {
-		const { username, password } = req.body;
-
-		if (!username || !password) {
-			return res
-				.status(400)
-				.json({ error: "Username and password required" });
-		}
-
-		// Get user from database
-		const result = await pool.query(
-			"SELECT * FROM users WHERE username = $1",
-			[username],
-		);
-
-		if (
-			result.rows.length === 0 ||
-			!(await bcrypt.compare(password, result.rows[0].password))
-		) {
-			return res.status(401).json({ error: "Invalid credentials" });
-		}
-
-		const user = result.rows[0];
-		const token = jwt.sign(
-			{ id: user.id, username: user.username },
-			JWT_SECRET,
-			{ expiresIn: "1h" },
-		);
-
-		res.json({ token, expiresIn: "1h" });
-	} catch (error) {
-		console.error("Login error:", error);
-		res.status(500).json({ error: "Login failed" });
-	}
-});
-
-app.post("/create_game", authenticateToken, async (req, res) => {
-	try {
-		const userId = req.user.id;
 		const gameId = getAvailableGameId(socketHandler.games);
-		const newGame = new Game(gameId, userId, [userId]);
+		const newGame = new Game(gameId, username, [username]);
 		socketHandler.games.set(gameId, newGame);
 
 		res.status(201).json({
@@ -193,7 +98,7 @@ app.post("/create_game", authenticateToken, async (req, res) => {
 			game: {
 				game_code: newGame.id,
 				created_at: new Date().toISOString(),
-				user1: userId,
+				user1: username,
 				user2: null,
 				winner: null,
 			},
@@ -204,13 +109,16 @@ app.post("/create_game", authenticateToken, async (req, res) => {
 	}
 });
 
-app.post("/join_game", authenticateToken, async (req, res) => {
+app.post("/join_game", async (req, res) => {
 	try {
-		const { game_code } = req.body;
-		const userId = req.user.id;
+		console.log("Join game route called");
+		const { game_code, username } = req.body;
 
 		if (!game_code) {
 			return res.status(400).json({ error: "Game code is required" });
+		}
+		if (!username) {
+			return res.status(400).json({ error: "Username is required" });
 		}
 
 		const game = socketHandler.games.get(game_code.toUpperCase());
@@ -219,7 +127,7 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 			return res.status(404).json({ error: "Game not found" });
 		}
 
-		if (game.players.has(userId)) {
+		if (game.players.has(username)) {
 			return res.status(200).json({
 				message: "You are already in this game",
 				game: game.getGameState(),
@@ -231,11 +139,11 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 		}
 
 		// Add player to game object
-		game.addPlayer(userId);
+		game.addPlayer(username);
 
 		// Associate user's websocket with the game
-		if (socketHandler.clients.has(userId)) {
-			socketHandler.clients.get(userId).gameId = game.id;
+		if (socketHandler.clients.has(username)) {
+			socketHandler.clients.get(username).gameId = game.id;
 		}
 
 		// Persist user2 in the database
@@ -245,7 +153,7 @@ app.post("/join_game", authenticateToken, async (req, res) => {
                 SET user2 = $1
                 WHERE game_code = $2 AND user2 IS NULL;
             `;
-			await pool.query(query, [userId, game.id]);
+			await pool.query(query, [username, game.id]);
 		} catch (dbError) {
 			console.error("Failed to add player to game in DB", dbError);
 			// Potentially roll back adding player to game object in memory
@@ -276,13 +184,16 @@ app.post("/join_game", authenticateToken, async (req, res) => {
 	}
 });
 
-app.post("/start_game", authenticateToken, async (req, res) => {
+app.post("/start_game", async (req, res) => {
 	try {
-		const { game_code } = req.body;
-		const userId = req.user.id;
+		console.log("Start game route called");
+		const { game_code, username } = req.body;
 
 		if (!game_code) {
 			return res.status(400).json({ error: "Game code is required" });
+		}
+		if (!username) {
+			return res.status(400).json({ error: "Username is required" });
 		}
 
 		const game = socketHandler.games.get(game_code.toUpperCase());
@@ -291,7 +202,7 @@ app.post("/start_game", authenticateToken, async (req, res) => {
 			return res.status(404).json({ error: "Game not found" });
 		}
 
-		if (game.creatorId !== userId) {
+		if (game.creatorId !== username) {
 			return res
 				.status(403)
 				.json({ error: "Only the game creator can start the game" });
@@ -328,36 +239,7 @@ app.post("/start_game", authenticateToken, async (req, res) => {
 	}
 });
 
-// Protected route example
-app.get("/profile", authenticateToken, async (req, res) => {
-	try {
-		const result = await pool.query(
-			"SELECT id, username, created_at FROM users WHERE id = $1",
-			[req.user.id],
-		);
-
-		if (result.rows.length === 0) {
-			return res.status(404).json({ error: "User not found" });
-		}
-
-		res.json({
-			message: "Protected route accessed",
-			user: result.rows[0],
-		});
-	} catch (error) {
-		console.error("Profile error:", error);
-		res.status(500).json({ error: "Failed to fetch profile" });
-	}
-});
-
 // Public route
 app.get("/health", (req, res) => {
 	res.json({ status: "OK", timestamp: new Date().toISOString() });
-});
-
-app.get("/user/:id", (req, res) => {
-	// TODO: Implement get user statistics logic
-	res.status(501).json({
-		message: "Get user statistics endpoint - implementation pending",
-	});
 });

@@ -2,7 +2,7 @@ const message = {
 	auth: "auth",
 	auth_success: "auth_success",
 	auth_error: "auth_error",
-	game_created: "game_created",
+
 	game_joined: "game_joined",
 	game_ended: "game_ended", // This is when the game is over and th winner is decided
 	target_player: "target_player",

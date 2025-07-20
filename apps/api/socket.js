@@ -1,21 +1,5 @@
 import { WebSocketServer } from "ws";
-import jwt from "jsonwebtoken";
 import { message } from "./message.js";
-import { Game, getAvailableGameId } from "./game.js";
-import pool from "./db.js";
-
-const CAPTCHA_POOL = [
-	"captcha1",
-	"captcha2",
-	"captcha3",
-	"captcha4",
-	"captcha5",
-	"captcha6",
-	"captcha7",
-	"captcha8",
-	"captcha9",
-	"captcha10",
-];
 
 class SocketHandler {
 	clients = new Map(); // id -> { gameId, ws }
@@ -41,18 +25,8 @@ class SocketHandler {
 					return;
 				}
 				if (!ws.isAuthenticated) {
-					if (data.type === message.auth && data.token) {
-						// JWT code structure, but do not check token for now
-						let decoded = {};
-						try {
-							decoded = jwt.decode(data.token) || {};
-						} catch (err) {
-							// ignore error, allow any user for now
-						}
-						ws.id =
-							decoded.id ||
-							Math.random().toString(36).substring(2, 15); // If this is not set then for testing
-
+					if (data.type === message.auth && data.username) {
+						ws.id = data.username;
 						ws.isAuthenticated = true;
 						this.clients.set(ws.id, { ws });
 						ws.send(JSON.stringify({ type: message.auth_success }));
